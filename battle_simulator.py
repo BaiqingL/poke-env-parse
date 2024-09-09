@@ -41,16 +41,25 @@ class LogBattle(Battle):
                         self.winner = split_message[1]
                     self.turn_logs[current_turn].append(split_message)
             log_file.close()
-
+    
+    def _register_player_pokemons(self):
+        print("Registering player pokemons")
+        for _, messages in self.turn_logs.items():
+            for split_message in messages:
+                if split_message[0] == "switch" and split_message[1].startswith(self._player_role):
+                    self.get_pokemon(split_message[1], details=split_message[2], force_self_team=True)
+                if split_message[0] == "move" and split_message[1].startswith(self._player_role):
+                    pokemon, move, presumed_target = split_message[1:4]
+                    self.get_pokemon(pokemon)._add_move(move)
+        
     def simulate_battle(self):
+        registered_player_side = False
         for turn, messages in self.turn_logs.items():
             print(f"Turn {turn}")
-            # print out the player pokemon names and opponent pokemon names
-            print(f"Player {self.player_username} pokemon names:")
-            print(self.team.keys())
-            
-            print(f"Opponent {self.opponent_username} pokemon names:")
-            print(self.opponent_team.keys())
+            # print out the player pokemons
+            for pokemon in self.team.values():
+                print(pokemon.moves)
+
             for split_message in messages:
 
                 if split_message[0] in self.parse_message_commands:
@@ -59,6 +68,9 @@ class LogBattle(Battle):
                             self.p1 = split_message[2]
                             if split_message[2] == self.winner:
                                 self._player_role = "p1"
+                                if not registered_player_side:
+                                    self._register_player_pokemons()
+                                    registered_player_side = True
                         elif split_message[1] == "p2":
                             self.p2 = split_message[2]
                             if split_message[2] == self.winner:
