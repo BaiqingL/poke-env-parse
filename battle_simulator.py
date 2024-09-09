@@ -53,9 +53,15 @@ class BattleSimulator(Battle):
         for _, messages in self.turn_logs.items():
             for split_message in messages:
                 if split_message[0] == "switch" and split_message[1].startswith(self._player_role):
-                    self.get_pokemon(split_message[1], details=split_message[2], force_self_team=True)
-                if split_message[0] == "move" and split_message[1].startswith(self._player_role):
-                    pokemon, move, presumed_target = split_message[1:4]
+                    team_key = split_message[1].replace(self._player_role+"a", self._player_role)
+                    if team_key not in self._team.keys():  
+                        pokemon = self.get_pokemon(split_message[1], details=split_message[2], force_self_team=True)
+                        hp = int(split_message[3].split("/")[0])
+                        pokemon._current_hp = hp
+                        pokemon._max_hp = hp
+                        self.logger.info(f"Registered pokemon {pokemon}")
+                elif split_message[0] == "move" and split_message[1].startswith(self._player_role):
+                    pokemon, move = split_message[1:3]
                     self.get_pokemon(pokemon)._add_move(move)
 
     def simulate_new_turn(self) -> bool:
@@ -96,4 +102,17 @@ class BattleSimulator(Battle):
 if __name__ == "__main__":
     battleSimulator: BattleSimulator = BattleSimulator("log_battle_1", "replay.log")
     while battleSimulator.simulate_new_turn():
-        pass
+        # print out the current state of the battle 
+        
+        # log out player team 
+        print(f"Player team: {battleSimulator.p1}")
+        for pokemon in battleSimulator._team:
+            print(f"{battleSimulator._team[pokemon].species} - {battleSimulator._team[pokemon].current_hp_fraction}")
+        
+        # log out opponent team 
+        print(f"Opponent team: {battleSimulator.p2}")
+        for pokemon in battleSimulator._opponent_team:
+            print(f"{battleSimulator._opponent_team[pokemon].species} - {battleSimulator._opponent_team[pokemon].current_hp_fraction}")
+
+        # log out current turn 
+        
