@@ -104,15 +104,10 @@ if __name__ == "__main__":
     while battleSimulator.simulate_new_turn():
         # print out the current state of the battle 
         
-        # log out player team 
-        print(f"Player team: {battleSimulator.p1}")
-        for pokemon in battleSimulator._team:
-            print(f"{battleSimulator._team[pokemon].species} - {battleSimulator._team[pokemon].current_hp_fraction}")
-        
-        # log out opponent team 
-        print(f"Opponent team: {battleSimulator.p2}")
-        for pokemon in battleSimulator._opponent_team:
-            print(f"{battleSimulator._opponent_team[pokemon].species} - {battleSimulator._opponent_team[pokemon].current_hp_fraction}")
-
-        # log out current turn 
-        
+        # log out what happened in the turn, like "in turn 1, [player] has active pokemon [pokemon] with [hp]/[max_hp] hp and [opponent] has active pokemon [pokemon] with [hp]/[max_hp] hp"
+        print(f"in turn {battleSimulator.turn}, {battleSimulator._player_role} has active pokemon {battleSimulator.active_pokemon.species} with {battleSimulator.active_pokemon.current_hp}/{battleSimulator.active_pokemon.max_hp} hp and {battleSimulator.opponent_active_pokemon.species} has {battleSimulator.opponent_active_pokemon.current_hp}/{battleSimulator.opponent_active_pokemon.max_hp} hp")
+        # log out what moves were used in the turn, like "[player] used thunderbolt on [opponent]"
+        if battleSimulator.active_pokemon.moves:
+            print(f"Players's {battleSimulator.active_pokemon.species} used a move on {battleSimulator.opponent_active_pokemon.species}")
+        if battleSimulator.opponent_active_pokemon.moves:
+            print(f"Opponent's {battleSimulator.opponent_active_pokemon.species} used a move on {battleSimulator.active_pokemon.species}")
