@@ -31,6 +31,7 @@ class BattleSimulator(Battle):
             "-swapsideconditions", "title", "-terastallize"
         ]
         self._parse_log_find_winner()
+        self.logger.info(f"Winner of this battle: {self.winner}")
         super().__init__(battle_tag=battle_tag, username=self.winner, gen=9, logger=self.logger)
 
     def _parse_log_find_winner(self) -> None:
@@ -65,9 +66,11 @@ class BattleSimulator(Battle):
                 elif split_message[0] == "move" and split_message[1].startswith(self._player_role):
                     pokemon, move = split_message[1:3]
                     self.get_pokemon(pokemon)._add_move(move)
+                    self.logger.info(f"Added move {move} to {pokemon}")
                 elif split_message[0] == "-terastallize" and split_message[1].startswith(self._player_role):
                     pokemon, terra_type = split_message[1:3]
                     self.get_pokemon(pokemon)._terastallized_type = terra_type
+                    self.logger.info(f"Added terra type {terra_type} to {pokemon}")
 
     def simulate_new_turn(self) -> bool:
         if self.turn >= len(self.turn_logs):
@@ -89,6 +92,7 @@ class BattleSimulator(Battle):
                         self.p2 = split_message[2]
                         if split_message[2] == self.winner:
                             self._player_role = "p2"
+                            self._register_player_pokemons()
                     if self.opponent_username is None and split_message[2] != self.winner:
                         self.opponent_username = split_message[2]
                     continue
@@ -120,7 +124,6 @@ if __name__ == "__main__":
         for _, pokemon in battleSimulator._team.items():
             if pokemon._current_hp > 0 and not pokemon._active:
                 available_orders.append(BattleOrder(pokemon))
-        print(f"Available moves: {battleSimulator.available_moves}")
         available_orders_prompt = ""
         for i in range(len(available_orders)):
             available_orders_prompt += (
