@@ -8,7 +8,7 @@ class BattleSimulator(Battle):
     def __init__(self, battle_tag: str, log_file_path: str):
         # give it a logger
         self.logger: logging.Logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.WARN)
         self.logger.addHandler(logging.StreamHandler())
 
         self.turn: int = 0
