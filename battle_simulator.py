@@ -1,4 +1,6 @@
 from poke_env.environment import Battle
+from poke_env.player.battle_order import BattleOrder
+from poke_env.environment.pokemon import Pokemon
 import logging
 from typing import Dict, List, Optional, Union
 
@@ -63,6 +65,9 @@ class BattleSimulator(Battle):
                 elif split_message[0] == "move" and split_message[1].startswith(self._player_role):
                     pokemon, move = split_message[1:3]
                     self.get_pokemon(pokemon)._add_move(move)
+                elif split_message[0] == "-terastallize" and split_message[1].startswith(self._player_role):
+                    pokemon, terra_type = split_message[1:3]
+                    self.get_pokemon(pokemon)._terastallized_type = terra_type
 
     def simulate_new_turn(self) -> bool:
         if self.turn >= len(self.turn_logs):
@@ -102,12 +107,26 @@ class BattleSimulator(Battle):
 if __name__ == "__main__":
     battleSimulator: BattleSimulator = BattleSimulator("log_battle_1", "replay.log")
     while battleSimulator.simulate_new_turn():
-        # print out the current state of the battle 
-        
-        # log out what happened in the turn, like "in turn 1, [player] has active pokemon [pokemon] with [hp]/[max_hp] hp and [opponent] has active pokemon [pokemon] with [hp]/[max_hp] hp"
-        print(f"in turn {battleSimulator.turn}, {battleSimulator._player_role} has active pokemon {battleSimulator.active_pokemon.species} with {battleSimulator.active_pokemon.current_hp}/{battleSimulator.active_pokemon.max_hp} hp and {battleSimulator.opponent_active_pokemon.species} has {battleSimulator.opponent_active_pokemon.current_hp}/{battleSimulator.opponent_active_pokemon.max_hp} hp")
-        # log out what moves were used in the turn, like "[player] used thunderbolt on [opponent]"
-        if battleSimulator.active_pokemon.moves:
-            print(f"Players's {battleSimulator.active_pokemon.species} used a move on {battleSimulator.opponent_active_pokemon.species}")
-        if battleSimulator.opponent_active_pokemon.moves:
-            print(f"Opponent's {battleSimulator.opponent_active_pokemon.species} used a move on {battleSimulator.active_pokemon.species}")
+        print(f"Players's pokemon: {battleSimulator.active_pokemon.species}")
+
+        available_orders: List[BattleOrder] = [
+            BattleOrder(battleSimulator.active_pokemon.moves[move]) for move in battleSimulator.active_pokemon.moves
+        ]
+        # if the active pokemon's _terastallize type is not None and terra is not active, add the terra move to the available moves
+        if battleSimulator.active_pokemon._terastallized_type is not None and not battleSimulator.active_pokemon._terastallized:
+            for move in battleSimulator.active_pokemon.moves:
+                available_orders.append(BattleOrder(battleSimulator.active_pokemon.moves[move], terastallize=True))
+        # look at the pokemon in the players team, and find the ones that are not fainted or active
+        for _, pokemon in battleSimulator._team.items():
+            if pokemon._current_hp > 0 and not pokemon._active:
+                available_orders.append(BattleOrder(pokemon))
+        print(f"Available moves: {battleSimulator.available_moves}")
+        available_orders_prompt = ""
+        for i in range(len(available_orders)):
+            available_orders_prompt += (
+                str(i)
+                + ". "
+                + str(available_orders[i])
+                + "\n"
+            )
+        print(f"Available orders: {available_orders_prompt}")
