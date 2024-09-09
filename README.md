@@ -13,4 +13,19 @@ This project provides tools to parse log files from Pokemon Showdown replays for
 
 1. Save a Pokemon Showdown replay as a log file (e.g., `replay.log`).
 
-2. Use the `LogBattle` class to parse and simulate the battle:
+
+2. Create a BattleSimulator instance:
+
+```python
+battleSimulator = BattleSimulator("log_battle_1", "replay.log")
+```
+
+3. Simulate the battle:
+
+```python
+while battleSimulator.simulate_new_turn():
+    pass
+```
+
+During the simulation, you can access the current state of the battle and the Pokémon involved at any point.
+

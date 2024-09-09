@@ -1,10 +1,11 @@
 from poke_env.environment import Battle
 import logging
 
-class LogBattle(Battle):
+class BattleSimulator(Battle):
     def __init__(self, battle_tag: str, log_file_path: str):
         # give it a logger
         logger = logging.getLogger(__name__)
+        self.turn = 0
         self.p1 = None 
         self.p2 = None
         self.winner = ""
@@ -51,44 +52,47 @@ class LogBattle(Battle):
                 if split_message[0] == "move" and split_message[1].startswith(self._player_role):
                     pokemon, move, presumed_target = split_message[1:4]
                     self.get_pokemon(pokemon)._add_move(move)
-        
-    def simulate_battle(self):
-        registered_player_side = False
-        for turn, messages in self.turn_logs.items():
-            print(f"Turn {turn}")
-            # print out the player pokemons
-            for pokemon in self.team.values():
-                print(pokemon.moves)
 
-            for split_message in messages:
+    def simulate_new_turn(self):
+        if self.turn >= len(self.turn_logs):
+            self._finish_battle()
+            return False
 
-                if split_message[0] in self.parse_message_commands:
-                    if split_message[0] == "player" and split_message[1] in ["p1", "p2"]:
-                        if split_message[1] == "p1":
-                            self.p1 = split_message[2]
-                            if split_message[2] == self.winner:
-                                self._player_role = "p1"
-                                if not registered_player_side:
-                                    self._register_player_pokemons()
-                                    registered_player_side = True
-                        elif split_message[1] == "p2":
-                            self.p2 = split_message[2]
-                            if split_message[2] == self.winner:
-                                self._player_role = "p2"
-                        if self.opponent_username is None and split_message[2] != self.winner:
-                            self.opponent_username = split_message[2]
-                        continue
-                    elif split_message[0] == "switch":
-                        if split_message[1] == "p1a":
-                            split_message[1] = self.p1
-                        elif split_message[1] == "p2a":
-                            split_message[1] = self.p2
-                    split_message.insert(0, "padding")
-                    self.parse_message(split_message)
+        print(f"Turn {self.turn}")
+        messages = self.turn_logs[self.turn]
 
-        # After parsing all lines, finish the battle
-        self._finish_battle()
+        # print out the player pokemons
+        for pokemon in self.team.values():
+            print(pokemon.moves)
+
+        for split_message in messages:
+            if split_message[0] in self.parse_message_commands:
+                if split_message[0] == "player" and split_message[1] in ["p1", "p2"]:
+                    if split_message[1] == "p1":
+                        self.p1 = split_message[2]
+                        if split_message[2] == self.winner:
+                            self._player_role = "p1"
+                            self._register_player_pokemons()
+                    elif split_message[1] == "p2":
+                        self.p2 = split_message[2]
+                        if split_message[2] == self.winner:
+                            self._player_role = "p2"
+                    if self.opponent_username is None and split_message[2] != self.winner:
+                        self.opponent_username = split_message[2]
+                    continue
+                elif split_message[0] == "switch":
+                    if split_message[1] == "p1a":
+                        split_message[1] = self.p1
+                    elif split_message[1] == "p2a":
+                        split_message[1] = self.p2
+                split_message.insert(0, "padding")
+                self.parse_message(split_message)
+
+        self.turn += 1
+        return True
 
 # Usage
-log_battle = LogBattle("log_battle_1", "replay.log")
-log_battle.simulate_battle()
+if __name__ == "__main__":
+    battleSimulator = BattleSimulator("log_battle_1", "replay.log")
+    while battleSimulator.simulate_new_turn():
+        pass
