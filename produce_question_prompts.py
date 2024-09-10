@@ -1,8 +1,208 @@
 from typing import Tuple, List
 from battle_simulator import BattleOrder
+import pandas as pd
+from poke_env.environment.battle import Battle
 from battle_simulator import BattleSimulator
+from javascript import require
+import json, requests
+move_effects = pd.read_csv("data/moves.csv")
+item_lookup = json.load(open("data/items.json"))
+random_sets = requests.get(
+            "https://pkmn.github.io/randbats/data/gen9randombattle.json"
+        ).json()
 
-def produce_question_prompt(scenario: str, winner_move: Tuple[BattleOrder, bool], available_orders: List[BattleOrder], winner_pokemon: str) -> str:
+def find_potential_random_set(team_data):
+        for pokemon in team_data.keys():
+            pokemon_name = team_data[pokemon]["name"].strip().lower()
+            if pokemon_name in random_sets.keys():
+                known_moves = team_data[pokemon]["moves"]
+                possible_sets = random_sets[pokemon_name]["roles"]
+                for role in possible_sets:
+                    if isinstance(known_moves, dict):
+                        known_moves = set(known_moves.keys())
+                    if known_moves.issubset(possible_sets[role]["moves"]):
+                        # also grab the evs and ivs for the pokemon
+                        if "evs" in possible_sets[role]:
+                            team_data[pokemon]["evs"] = possible_sets[role]["evs"]
+                        if "ivs" in possible_sets[role]:
+                            team_data[pokemon]["ivs"] = possible_sets[role]["ivs"]
+
+                        potential_moveset = possible_sets[role]["moves"]
+                        seen_unseen_moves = dict()
+                        for move in potential_moveset:
+                            if move in known_moves:
+                                seen_unseen_moves[move] = "seen"
+                            else:
+                                seen_unseen_moves[move] = "unseen"
+                        team_data[pokemon]["moves"] = seen_unseen_moves
+
+                        break
+        return team_data
+    
+def find_move_effect(move_name: str, move_effects: pd.DataFrame):
+    move_effect = move_effects.loc[move_effects["name"] == move_name]
+    if move_effect.empty:
+        return None
+    # tf is this
+    return list(move_effect.to_dict()["effect"].values())[0]
+
+def get_team_data(battle: Battle, opponent: bool = False) -> dict:
+    result = {}
+    if not opponent:
+        team = battle.team
+    else:
+        team = battle.opponent_team
+    for pokemon in team.values():
+        result[pokemon.species] = {
+            "moves": {},
+            "hp": pokemon.current_hp,
+            "ability": pokemon.ability,
+            "fainted": pokemon.fainted,
+            "item": item_lookup.get(pokemon.item, ""),
+            "tera": (
+                pokemon.tera_type.name.lower().capitalize()
+                if pokemon.terastallized
+                else ""
+            ),
+            "name": pokemon._data.pokedex[pokemon.species]["name"],
+            "boosts": pokemon.boosts,
+            "level": pokemon.level,
+        }
+        for move in pokemon.moves.keys():
+            result[pokemon.species]["moves"][pokemon.moves[move].entry["name"]] = {
+                "type": pokemon.moves[move].entry["type"],
+                "accuracy": pokemon.moves[move].entry["accuracy"],
+                "secondary effect": pokemon.moves[move].entry.get(
+                    "secondary", None
+                ),
+                "base power": pokemon.moves[move].entry["basePower"],
+                "category": pokemon.moves[move].entry["category"],
+                "priority": pokemon.moves[move].entry["priority"],
+                "effect": find_move_effect(
+                    pokemon.moves[move].entry["name"], move_effects
+                ),
+            }
+    return result
+def calculate_damage(
+        atkr: dict,
+        defdr: dict,
+        move_used,
+        opponent: bool = False,
+        log: bool = False,
+    ):
+
+        # remove key evasion and accuracy from boosts
+        if "evasion" in atkr["boosts"]:
+            del atkr["boosts"]["evasion"]
+        if "accuracy" in atkr["boosts"]:
+            del atkr["boosts"]["accuracy"]
+        if "evasion" in defdr["boosts"]:
+            del defdr["boosts"]["evasion"]
+        if "accuracy" in defdr["boosts"]:
+            del defdr["boosts"]["accuracy"]
+        damage_calc = require("@smogon/calc")
+        generation = damage_calc.Generations.get(9)
+        attacker = None
+        defender = None
+        atkr_attributes = {}
+        if "level" in atkr:
+            atkr_attributes["level"] = atkr.get("level")
+        if "item" in atkr:
+            atkr_attributes["item"] = atkr.get("item")
+        if "boosts" in atkr:
+            atkr_attributes["boosts"] = atkr.get("boosts")
+        if "tera" in atkr:
+            atkr_attributes["teraType"] = atkr.get("tera")
+        if "item" in atkr:
+            atkr_attributes["item"] = atkr.get("item")
+        if "evs" in atkr:
+            atkr_attributes["evs"] = atkr.get("evs")
+        if "ivs" in atkr:
+            atkr_attributes["ivs"] = atkr.get("ivs")
+        defdr_attributes = {}
+        if "level" in defdr:
+            defdr_attributes["level"] = defdr.get("level")
+        if "item" in defdr:
+            defdr_attributes["item"] = defdr.get("item")
+        if "boosts" in defdr:
+            defdr_attributes["boosts"] = defdr.get("boosts")
+        if "tera" in defdr:
+            defdr_attributes["teraType"] = defdr.get("tera")
+        if "item" in defdr:
+            defdr_attributes["item"] = defdr.get("item")
+        if "evs" in defdr:
+            defdr_attributes["evs"] = defdr.get("evs")
+        if "ivs" in defdr:
+            defdr_attributes["ivs"] = defdr.get("ivs")
+        try:
+            attacker = damage_calc.Pokemon.new(
+                generation, atkr.get("name"), atkr_attributes
+            )
+        except:
+            attacker = damage_calc.Pokemon.new(
+                generation, atkr.get("name").split("-")[0], atkr_attributes
+            )
+        try:
+            defender = damage_calc.Pokemon.new(
+                generation, defdr.get("name"), defdr_attributes
+            )
+        except:
+            defender = damage_calc.Pokemon.new(
+                generation, defdr.get("name").split("-")[0], defdr_attributes
+            )
+        move = damage_calc.Move.new(generation, move_used)
+
+        result = damage_calc.calculate(generation, attacker, defender, move)
+        if log:
+            print("Attacker: ", attacker)
+            print("Defender: ", defender)
+            print("Defender HP: ", defender.originalCurHP)
+            print("Move: ", move)
+            print("RESULT: ", result)
+        if result.damage == 0:
+            return 0, 0
+        if isinstance(result.damage, str):
+            return result.damage + "%", result.damage + "%"
+        try:
+            if isinstance(result.damage, int):
+                min_dmg = result.damage
+                max_dmg = result.damage
+            else:
+                dmg_range = result.damage.valueOf()
+
+                min_dmg = min(dmg_range)
+                max_dmg = max(dmg_range)
+        except:
+            print("INPUTS: ", atkr.get("name"), defdr.get("name"), move_used)
+            print(atkr)
+            print(defdr)
+            print("ERROR: ", result.damage)
+            print("DMG RANGE: ", dmg_range)
+
+        # calculate the percentage of damage
+        hp = defdr.get("hp")
+        if log:
+            print("DEFENDER HP Ratio: ", hp)
+            print("MIN DMG: ", min_dmg)
+            print("MAX DMG: ", max_dmg)
+            print("MOVE USED: ", move_used)
+        if hp == 0:
+            return "100%", "100%"
+        if hp == None:
+            hp = defdr.get("maximum hp")
+        if opponent:
+            min_dmg_percent = int(
+                min_dmg / (defender.originalCurHP * (hp / 100.0)) * 100
+            )
+            max_dmg_percent = int(
+                max_dmg / (defender.originalCurHP * (hp / 100.0)) * 100
+            )
+        else:
+            min_dmg_percent = int(min_dmg / hp * 100)
+            max_dmg_percent = int(max_dmg / hp * 100)
+        return str(min_dmg_percent) + "%", str(max_dmg_percent) + "%"
+
+def produce_question_prompt(scenario: str, winner_move: Tuple[BattleOrder, bool], available_orders: List[BattleOrder], winner_pokemon: str, loser_pokemon: str, player_moves_impact: List[Tuple[str, Tuple[str, str]]], opponent_moves_impact: List[Tuple[str, Tuple[str, str]]]) -> str:
     # https://www.reddit.com/r/stunfisk/comments/801dxo/the_ultimate_guide_to_random_battles/
     strategy_prompt = """It's really important to know things like what different items do, what different abilities Pokemon have, the moves that are in the game and what those moves do, their accuracies and power and their effects, and knowing as best you can the Pokemon type weaknesses chart. All this stuff you can look up either in Google or in the Pokemon interface, but remember that in a Showdown battle you are on the clock. If you spend too much time looking up things, you're not going to have enough time to be present strategizing in combat. So the more stuff you can memorize ahead of time, the more helpful it's going to be for your actual battles.
 Random Battles is unique in that it purely measures battling skill as players have no control over their teams. In other tiers, the viability of teams will affect players' win-loss records, but in Random Battles, everyone is on an even playing field. Many argue against the competitiveness of Random Battles by pointing out how the random factor can either bring a good or bad matchup, making player skill level hard to determine. This is a good point, but it only holds true for each individual battle. Given the law of large numbers, in the long run everyone will get similar amounts of good and bad matchups and everyone will get haxed the same amount. So eventually, players will be placed on the ladder accordingly with their skill level. The ladder itself proves this, because for example the top 30 has the same names floating around, which shows rankings aren't entirely decided by luck of the draw.
@@ -43,6 +243,12 @@ Here's the scenario:
 
 [SCENARIO]
 
+Here is the impact of the player's [WINNER_POKEMON] moves and the hp range that the move will do:
+[PLAYER_MOVES_IMPACT]
+
+Here is the impact of the opponent's [LOSER_POKEMON] moves and the hp range that the move will do:
+[OPPONENT_MOVES_IMPACT]
+
 The winner's active Pokemon is [WINNER_POKEMON]. They had the following choices:
 [WINNER_CHOICES]
 
@@ -61,40 +267,97 @@ Given the above information, I would recommend to do xyz
 Respond as if you don't know what move the player chose, and you managed to analyze the situation to arrive at the conclusion.
 However, if the pokemon fainted you should acknowledge it by saying "Since the Pokemon fainted, the winner chose to sent out xyz because of abc"""
 
+
     available_orders_prompt = ""
     for i, order in enumerate(available_orders):
         available_orders_prompt += f"{i}. {str(order)}\n"
-    result = question_prompt.replace("[STRATEGY PROMPT]", strategy_prompt).replace("[SCENARIO]", scenario).replace("[WINNER_POKEMON]", winner_pokemon).replace("[WINNER_CHOICES]", available_orders_prompt)
+    result = question_prompt.replace("[STRATEGY PROMPT]", strategy_prompt).replace("[SCENARIO]", scenario).replace("[WINNER_POKEMON]", winner_pokemon).replace("[LOSER_POKEMON]", loser_pokemon).replace("[WINNER_CHOICES]", available_orders_prompt)
     if not winner_move[1]:
         result = result.replace("[WINNER_MOVE]", str(winner_move[0]))
     else:
         result = result.replace("[WINNER_MOVE]", "Since the Pokemon fainted, we cannot determine the exact move they used. However, the winner chose to swap in " + str(winner_move[0].order.species) + ".")
+    
+    player_moves_impact_prompt = ""
+    for move in player_moves_impact:
+        player_moves_impact_prompt += f"{move[0]}: {move[1][0]} - {move[1][1]}\n"
+    result = result.replace("[PLAYER_MOVES_IMPACT]", player_moves_impact_prompt)
+    opponent_moves_impact_prompt = ""
+    for move in opponent_moves_impact:
+        opponent_moves_impact_prompt += f"{move[0]}: {move[1][0]} - {move[1][1]}\n"
+    result = result.replace("[OPPONENT_MOVES_IMPACT]", opponent_moves_impact_prompt)
     return result
-
 if __name__ == "__main__":
     import pandas as pd
     from battle_simulator import BattleSimulator
+    from tqdm import tqdm
     
     # Read from the parquet file
     df = pd.read_parquet("data/battle_logs.parquet")
     
-    # Read only the first row
-    first_row = df.iloc[0]
+    # Initialize a new column for prompts
+    df['prompts'] = [[] for _ in range(len(df))]
     
-    # Create a BattleSimulator instance with the log content from the first row
-    battleSimulator = BattleSimulator("log_battle_1", first_row['log_content'])
-    
-    # Parse the battle turn by turn and produce a question prompt for each turn
-    turn_count = 0
-    question_prompts = {}
-    while battleSimulator.simulate_new_turn():
-
-        # Produce and print the question prompt for the current turn
+    # Iterate through each row in the dataframe
+    for index, row in tqdm(df.iterrows(), total=len(df), desc="Generating prompts"):
         try:
-            question_prompt = produce_question_prompt(battleSimulator.get_scenario(), battleSimulator.player_decision[turn_count], battleSimulator.get_available_orders(), battleSimulator.active_pokemon.species)
-        except KeyError as e:
-            break
-        question_prompts[turn_count] = question_prompt
-        #print("Turn count: ", turn_count)
-        turn_count += 1
-    print(question_prompts[25])
+            # Create a BattleSimulator instance with the log content from the current row
+            battleSimulator = BattleSimulator(f"log_battle_{index}", row['log_content'])
+            
+            # Parse the battle turn by turn and produce a question prompt for each turn
+            turn_count = 0
+            question_prompts = []
+            while battleSimulator.simulate_new_turn():
+                player_team = get_team_data(battleSimulator)
+                opponent_team = find_potential_random_set(
+                    get_team_data(battleSimulator, opponent=True)
+                )
+                player_moves_impact = []
+                for move in battleSimulator.active_pokemon.moves.keys():
+                    player_moves_impact.append(
+                        (
+                            move,
+                            calculate_damage(
+                                player_team[battleSimulator.active_pokemon.species], 
+                                opponent_team[battleSimulator.opponent_active_pokemon.species], 
+                                move, 
+                                opponent=True
+                            ),
+                        )
+                    )
+                opponent_moves_impact = []
+                for move in battleSimulator.opponent_active_pokemon.moves.keys():
+                    opponent_moves_impact.append(
+                        (
+                            move,
+                            calculate_damage(
+                                opponent_team[battleSimulator.opponent_active_pokemon.species], 
+                                player_team[battleSimulator.active_pokemon.species], 
+                                move, 
+                                opponent=False
+                            ),
+                        )
+                    )
+                # Produce the question prompt for the current turn
+                try:
+                    question_prompt = produce_question_prompt(
+                        battleSimulator.get_scenario(), 
+                        battleSimulator.player_decision[turn_count], 
+                        battleSimulator.get_available_orders(), 
+                        battleSimulator.active_pokemon.species, 
+                        battleSimulator.opponent_active_pokemon.species, 
+                        player_moves_impact, 
+                        opponent_moves_impact
+                    )
+                    question_prompts.append(question_prompt)
+                except KeyError:
+                    break
+                turn_count += 1
+            
+            # Store the prompts for this battle in the dataframe
+            df.at[index, 'prompts'] = question_prompts
+        except Exception as e:
+            print(f"Error processing row {index}: {str(e)}")
+            continue
+    
+    # Save the updated dataframe back to a parquet file
+    df.to_parquet("data/battle_logs_with_prompts.parquet")

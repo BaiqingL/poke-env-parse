@@ -87,7 +87,7 @@ class BattleSimulator(Battle):
         for message in next_turn_messages:
             if message[0] == "move" and message[1].startswith(self._player_role):
                 pokemon, move = message[1:3]
-                move = move.lower().replace(" ", "").replace("-", "")
+                move = "".join(char for char in move if char.isalnum()).lower()
                 pokemon_obj = self.get_pokemon(pokemon)
                 move_obj = pokemon_obj.moves[move]
                 self.player_decision[current_turn] = (BattleOrder(move_obj), False)
