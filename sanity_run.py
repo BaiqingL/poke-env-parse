@@ -5,7 +5,7 @@ import os
 from tqdm import tqdm
 
 # Read the parquet file
-df = pd.read_parquet('data/processed_battle_logs.parquet')
+df = pd.read_parquet('data/battle_logs.parquet')
 
 # Function to run battle simulator on a single log
 def run_simulator(battle_id, log_content):
