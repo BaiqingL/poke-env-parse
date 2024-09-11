@@ -29,3 +29,15 @@ while battleSimulator.simulate_new_turn():
 
 During the simulation, you can access the current state of the battle and the Pokémon involved at any point.
 
+
+## Data Processing Pipeline
+
+The following files are used in sequence to clean and parse the data:
+
+1. `paginated_search.py`: Grabs replays from the replay API and filters out ones with rating < 2200
+2. `grab_battle_logs.py`: Grabs the battle logs for the replays
+3. `produce_question_prompts.py`: Produces the question prompts for the replays
+4. `clean_filter_prompt_parquet.py`: Cleans the prompts for the replays and filters out ones with rating < 2200
+
+Each script builds upon the output of the previous one, creating a streamlined data processing pipeline.
+

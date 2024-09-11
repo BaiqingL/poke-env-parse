@@ -229,6 +229,32 @@ Some very crucial information can be gathered about the opponent's movesets if t
 Observing how the opponent switches can also yield significant information, particularly with deciding which Pokemon is a threat to their team. As an example, Choice Specs Heliolisk is out against the opponent's Golduck. Instead of switching in a Pokemon that resists Electric, the opponent sacks Golduck to Thunderbolt. This indicates that the opponent either has no Electric resists or no checks to Heliolisk, so it can be ascertained that Heliolisk is a massive threat and thus a win condition. Furthermore, if you have another Electric type like Raikou, then it can be determined that it also is a threat as it is quite similar to Heliolisk. In this situation, Heliolisk and Raikou should pretty much guarantee a win because as one punches holes in the opponent's team, the other should have no problem cleaning up. So, in a nutshell, if the opponent doesn't switch in a Pokemon that has a type advantage against the one you currently have in play, you can determine that that Pokemon is a threat, or that the type of that Pokemon threatens your opponent's team.
 Generation 9 introduces Terastallization, which lets your Pokemon transform in the middle of battle from its current typing into its Tera type. This adds a new layer of depth to Gen 9 battles. Tera typing can be super useful for things such as setting up STAB moves for that Tera type, setting up your Terablast users, or resisting a predicted attack you know your opponent is going to use."""
 
+    type_effectiveness_prompt = """
+Type      | Strong Against         | Weak To
+----------|------------------------|------------------
+Normal    | -                      | Fighting
+Fire      | Grass, Ice, Bug, Steel | Water, Ground, Rock
+Water     | Fire, Ground, Rock     | Electric, Grass
+Electric  | Water, Flying          | Ground
+Grass     | Water, Ground, Rock    | Fire, Ice, Poison, Flying, Bug
+Ice       | Grass, Ground, Flying, | Fire, Fighting, Rock, Steel
+          | Dragon                 |
+Fighting  | Normal, Ice, Rock,     | Flying, Psychic, Fairy
+          | Dark, Steel            |
+Poison    | Grass, Fairy           | Ground, Psychic
+Ground    | Fire, Electric, Poison,| Water, Grass, Ice
+          | Rock, Steel            |
+Flying    | Grass, Fighting, Bug   | Electric, Ice, Rock
+Psychic   | Fighting, Poison       | Bug, Ghost, Dark
+Bug       | Grass, Psychic, Dark   | Fire, Flying, Rock
+Rock      | Fire, Ice, Flying, Bug | Water, Grass, Fighting, Ground, Steel
+Ghost     | Psychic, Ghost         | Ghost, Dark
+Dragon    | Dragon                 | Ice, Dragon, Fairy
+Dark      | Psychic, Ghost         | Fighting, Bug, Fairy
+Steel     | Ice, Rock, Fairy       | Fire, Fighting, Ground
+Fairy     | Fighting, Dragon, Dark | Poison, Steel
+"""
+
     question_prompt = """Imagine you're an expert Pokemon Showdown player analyzing a random battle. I'll provide you with a scenario from a Gen 9 random battle, including details about both teams, the current field conditions, and the move that was just made. I want you to explain why the player likely chose that specific move.
 In your response, please:
 
@@ -238,6 +264,9 @@ Break down your reasoning step-by-step, consider the following tips for analyzin
 
 Consider type advantages, the alternative moves the player could have made and why they might have been rejected.
 Conclude with a summary of why this move was likely the best choice in this situation.
+
+Here's the type effectiveness chart:
+[TYPE EFFECTIVENESS CHART]
 
 Here's the scenario:
 
@@ -271,7 +300,7 @@ However, if the pokemon fainted you should acknowledge it by saying "Since the P
     available_orders_prompt = ""
     for i, order in enumerate(available_orders):
         available_orders_prompt += f"{i}. {str(order)}\n"
-    result = question_prompt.replace("[STRATEGY PROMPT]", strategy_prompt).replace("[SCENARIO]", scenario).replace("[WINNER_POKEMON]", winner_pokemon).replace("[LOSER_POKEMON]", loser_pokemon).replace("[WINNER_CHOICES]", available_orders_prompt)
+    result = question_prompt.replace("[STRATEGY PROMPT]", strategy_prompt).replace("[SCENARIO]", scenario).replace("[TYPE EFFECTIVENESS CHART]", type_effectiveness_prompt).replace("[WINNER_POKEMON]", winner_pokemon).replace("[LOSER_POKEMON]", loser_pokemon).replace("[WINNER_CHOICES]", available_orders_prompt)
     if not winner_move[1]:
         result = result.replace("[WINNER_MOVE]", str(winner_move[0]))
     else:
